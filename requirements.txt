@@ -1,0 +1,6 @@
+pygame
+vectormath
+numpy
+imageio
+pytest
+matplotlib
