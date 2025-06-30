@@ -1,0 +1,52 @@
+{
+    "angle": 90.0,
+    "components": [
+        {
+            "angle": 0.0,
+            "inertial_moment": 100.0,
+            "mass": 50000.0,
+            "name": "Main Body",
+            "type": "Model",
+            "x": 0.0,
+            "y": 0.0
+        },
+        {
+            "angle": 0.0,
+            "inertial_moment": 1.0,
+            "isp": 350,
+            "mass": 500.0,
+            "max_pitch": 10,
+            "max_power": 100,
+            "min_power": 20,
+            "name": "Main Engine",
+            "thrust": 1000000.0,
+            "type": "Thruster",
+            "x": 0.0,
+            "y": -20.0
+        },
+        {
+            "angle": 90.0,
+            "inertial_moment": 0.5,
+            "is_rcs": "yes",
+            "isp": 250,
+            "mass": 20.0,
+            "max_pitch": 0,
+            "max_power": 100,
+            "min_power": 100,
+            "name": "RCS Thruster",
+            "thrust": 10000.0,
+            "type": "Thruster",
+            "x": 5.0,
+            "y": 10.0
+        }
+    ],
+    "fuel": 3000.0,
+    "inertial_moment": 100.0,
+    "mass": 50000.0,
+    "name": "Sample Starship",
+    "rot_velocity": 0.0,
+    "vx": 0.0,
+    "vy": 0.0,
+    "x": 100.0,
+    "y": 500.0
+}

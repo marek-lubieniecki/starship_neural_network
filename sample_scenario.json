@@ -1,0 +1,21 @@
+{
+    "description": "Simple vertical landing from 500m altitude",
+    "environment": {
+        "atmospheric_density": 1.225,
+        "gravity": -9.81,
+        "wind_speed": 0.0
+    },
+    "initial_conditions": {
+        "altitude": 500.0,
+        "angle": 85.0,
+        "horizontal_position": 0.0,
+        "horizontal_velocity": -20.0,
+        "vertical_velocity": -50.0
+    },
+    "name": "Basic Landing Scenario",
+    "success_criteria": {
+        "max_horizontal_offset": 10.0,
+        "max_landing_angle": 5.0,
+        "max_landing_velocity": 5.0
+    }
+}
