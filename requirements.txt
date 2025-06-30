@@ -1,6 +1,13 @@
-pygame
-vectormath
-numpy
-imageio
-pytest
-matplotlib
+# Core simulation dependencies
+pygame>=2.6.0
+vectormath>=0.2.2
+numpy>=1.21.0
+imageio>=2.9.0
+matplotlib>=3.5.0
+
+# Machine learning dependencies
+torch>=2.0.0
+deap>=1.4.0
+
+# Development and testing
+pytest>=7.0.0
