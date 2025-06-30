@@ -9,6 +9,8 @@ import threading
 import importlib
 import imageio
 import multiprocessing
+from typing import Any, Dict, List, Optional, Tuple
+from .core import PhysicsObject, ControllableObject, SensorObject, RenderableObject, SimulationEnvironment, ConfigurableObject
 
 if not pygame.font: print('Warning, fonts disabled')
 if not pygame.mixer: print('Warning, sound disabled')
@@ -64,10 +66,11 @@ class State():
         self.velocity.x=vx
         self.velocity.y=vy
 
-class Model():
+class Model(PhysicsObject, ConfigurableObject):
     """Handles physical model"""
     def __init__(self, config):
-        self.name = config["name"]
+        # Initialize PhysicsObject with name and config
+        super().__init__(config.get("name", "Model"), config)
         x=config["x"]
         y=config["y"]
         if "vx" in config:
@@ -95,9 +98,6 @@ class Model():
 
     def addComponent(self, component):
         self.components.append(component)
-    
-    def getPosition(self):
-        return self.state.position
 
     def setPosition(self, x, y):
         self.state.setPosition(x,y)
@@ -131,25 +131,8 @@ class Model():
         theta = self.state.pitch
         return np.array([ [cos(theta), -sin(theta)],[sin(theta), cos(theta)] ])
 
-    def getForces(self):
-        F = self.getForce()
-        rot = self.getRotationMatrix()
-        for component in self.components:
-            F += rot.dot(component.getForces())
-        return F
-    
     def getTorque(self):
         return 0.0
-    
-    def getTorques(self):
-        T = self.getTorque()
-        for component in self.components:
-#            if mode == "debug":
- #               print(f"   [{component.name}] r={component.getPosition()} F={component.getForces()}", end='')
-            T += component.getPosition().cross(component.getForces())[2] #third component
-  #          if mode == "debug":
-   #             print(f" T={T}")
-        return T
 
     def update(self, dt):
         F = self.getForces()
@@ -171,6 +154,81 @@ class Model():
         self.state.rot_velocity += e*dt
 
         return a, e
+
+    # Implement PhysicsObject abstract methods
+    def getPosition(self) -> vmath.Vector2:
+        return self.state.position
+
+    def getVelocity(self) -> vmath.Vector2:
+        return self.state.velocity
+
+    def getForces(self) -> vmath.Vector2:
+        F = self.getForce()
+        rot = self.getRotationMatrix()
+        for component in self.components:
+            F += rot.dot(component.getForces())
+        return F
+
+    def getTorques(self) -> float:
+        T = self.getTorque()
+        for component in self.components:
+#            if mode == "debug":
+ #               print(f"   [{component.name}] r={component.getPosition()} F={component.getForces()}", end='')
+            T += component.getPosition().cross(component.getForces())[2] #third component
+  #          if mode == "debug":
+   #             print(f" T={T}")
+        return T
+
+    # Implement SimulationObject abstract methods  
+    def getState(self) -> Dict[str, Any]:
+        return {
+            'position': [self.state.position.x, self.state.position.y],
+            'velocity': [self.state.velocity.x, self.state.velocity.y], 
+            'pitch': self.state.pitch,
+            'rot_velocity': self.state.rot_velocity,
+            'mass': self.state.mass,
+            'inertial_moment': self.state.inertial_moment
+        }
+
+    def setState(self, state: Dict[str, Any]) -> None:
+        if 'position' in state:
+            self.state.position = vmath.Vector2(state['position'][0], state['position'][1])
+        if 'velocity' in state:
+            self.state.velocity = vmath.Vector2(state['velocity'][0], state['velocity'][1])
+        if 'pitch' in state:
+            self.state.pitch = state['pitch']
+        if 'rot_velocity' in state:
+            self.state.rot_velocity = state['rot_velocity']
+        if 'mass' in state:
+            self.state.mass = state['mass']
+        if 'inertial_moment' in state:
+            self.state.inertial_moment = state['inertial_moment']
+
+    # Implement ConfigurableObject abstract methods
+    def loadConfiguration(self, config: Dict[str, Any]) -> None:
+        """Load configuration from a dictionary."""
+        if self.validateConfiguration(config):
+            self.__init__(config)
+
+    def validateConfiguration(self, config: Dict[str, Any]) -> bool:
+        """Validate a configuration dictionary."""
+        required_fields = ['name', 'x', 'y', 'angle', 'mass', 'inertial_moment']
+        return all(field in config for field in required_fields)
+
+    def getDefaultConfiguration(self) -> Dict[str, Any]:
+        """Get the default configuration for this object type."""
+        return {
+            'name': 'Model',
+            'x': 0,
+            'y': 100,
+            'vx': 0,
+            'vy': 0,
+            'rot_vel': 0,
+            'angle': 0,
+            'mass': 1000,
+            'inertial_moment': 100,
+            'components': []
+        }
 
 class IMUHandler:
     def __init__(self, imu):
@@ -194,8 +252,9 @@ class IMUHandler:
     def updateRotationalAcceleration(self, rot_acc):
         self.imu.rot_acc = rot_acc
 
-class IMU:
+class IMU(SensorObject):
     def __init__(self):
+        super().__init__("IMU", {})
         self.position = vmath.Vector2(0,0)
         self.pitch = 0
         self.rot_vel = 0
@@ -230,6 +289,52 @@ class IMU:
     def getRotationalAcceleration(self):
         return self.rot_acc
 
+    # Implement SensorObject abstract methods
+    def update(self, dt: float) -> None:
+        """Update sensor state (IMU typically gets updated by external handlers)."""
+        pass
+
+    def getState(self) -> Dict[str, Any]:
+        """Get the current state of the IMU sensor."""
+        return {
+            'position': [self.position.x, self.position.y],
+            'velocity': [self.velocity.x, self.velocity.y],
+            'acceleration': [self.acceleration.x, self.acceleration.y],
+            'pitch': self.pitch,
+            'rot_velocity': self.rot_vel,
+            'rot_acceleration': self.rot_acc
+        }
+
+    def setState(self, state: Dict[str, Any]) -> None:
+        """Set the state of the IMU sensor."""
+        if 'position' in state:
+            self.position = vmath.Vector2(state['position'][0], state['position'][1])
+        if 'velocity' in state:
+            self.velocity = vmath.Vector2(state['velocity'][0], state['velocity'][1])
+        if 'acceleration' in state:
+            self.acceleration = vmath.Vector2(state['acceleration'][0], state['acceleration'][1])
+        if 'pitch' in state:
+            self.pitch = state['pitch']
+        if 'rot_velocity' in state:
+            self.rot_vel = state['rot_velocity']
+        if 'rot_acceleration' in state:
+            self.rot_acc = state['rot_acceleration']
+
+    def getMeasurement(self) -> Dict[str, Any]:
+        """Get the current sensor measurement."""
+        return self.getState()
+
+    def getNoise(self) -> Dict[str, float]:
+        """Get the noise characteristics of this sensor."""
+        return {
+            'position': 0.01,      # 1cm position noise
+            'velocity': 0.01,      # 1cm/s velocity noise  
+            'acceleration': 0.1,   # 0.1 m/s² acceleration noise
+            'pitch': 0.001,        # ~0.06° pitch noise
+            'rot_velocity': 0.01,  # 0.01 rad/s rotational velocity noise
+            'rot_acceleration': 0.1 # 0.1 rad/s² rotational acceleration noise
+        }
+
 class Controller:
     def __init__(self):
         self.rcs_top_left_power = 0
@@ -243,7 +348,7 @@ class Controller:
 
 
 
-class Thruster(Model):
+class Thruster(Model, ControllableObject):
     def __init__(self, config):
         super().__init__(config)
         self.power = 0.0
@@ -300,10 +405,26 @@ class Thruster(Model):
         thrust = self.getPower()/100.0*self.thrust
         return vmath.Vector2(-thrust*sin(self.state.pitch), thrust*cos(self.state.pitch))
 
-class StarshipSim():
+    # Implement ControllableObject abstract methods
+    def setControlInputs(self, inputs: Dict[str, float]) -> None:
+        """Set control inputs for this thruster."""
+        if 'power' in inputs:
+            self.setPower(inputs['power'])
+        if 'gimbal' in inputs:
+            self.gimbal(inputs['gimbal'])
+
+    def getControlLimits(self) -> Dict[str, Tuple[float, float]]:
+        """Get the limits for each control input."""
+        return {
+            'power': (self.min_power, self.max_power),
+            'gimbal': (-self.max_pitch, self.max_pitch)
+        }
+
+class StarshipSim(PhysicsObject, ControllableObject):
     """Operates starship"""
 
     def __init__(self, control_system=None):
+        super().__init__("StarshipSim", {})
         self.IMU = IMU()
         self.IMUHandler = IMUHandler(self.IMU)
         self.controller = Controller()
@@ -399,6 +520,70 @@ class StarshipSim():
                     # print(f"  [{component.name}]: {mass_flow_rate:.2f} kg/s",end='')
                     #component.updateSprite(self.getPosition().x, self.getPosition().y, self.getPitch())
         # print()
+
+    # Implement PhysicsObject abstract methods (delegate to model)
+    def getPosition(self) -> vmath.Vector2:
+        return self.model.getPosition()
+
+    def getVelocity(self) -> vmath.Vector2:
+        return self.model.getVelocity()
+
+    def getMass(self) -> float:
+        return self.model.getMass()
+
+    def getForces(self) -> vmath.Vector2:
+        return self.model.getForces()
+
+    def getTorques(self) -> float:
+        return self.model.getTorques()
+
+    # Implement SimulationObject abstract methods
+    def getState(self) -> Dict[str, Any]:
+        """Get the current state of the starship."""
+        state = self.model.getState()
+        state['fuel'] = getattr(self.model, 'fuel', 0)
+        return state
+
+    def setState(self, state: Dict[str, Any]) -> None:
+        """Set the state of the starship."""
+        self.model.setState(state)
+        if 'fuel' in state:
+            self.model.fuel = state['fuel']
+
+    # Implement ControllableObject abstract methods
+    def setControlInputs(self, inputs: Dict[str, float]) -> None:
+        """Set control inputs for the starship."""
+        # Map control inputs to component names
+        control_mapping = {
+            'raptor_left_power': 'Raptor 1',
+            'raptor_right_power': 'Raptor 2',
+            'rcs_top_left_power': 'RCS TL',
+            'rcs_top_right_power': 'RCS TR',
+            'rcs_bot_left_power': 'RCS BL',
+            'rcs_bot_right_power': 'RCS BR'
+        }
+        
+        for control_name, component_name in control_mapping.items():
+            if control_name in inputs:
+                self.setPower(inputs[control_name], component_name)
+        
+        if 'raptor_left_pitch' in inputs:
+            self.gimbalThruster(inputs['raptor_left_pitch'], 'Raptor 1')
+        if 'raptor_right_pitch' in inputs:
+            self.gimbalThruster(inputs['raptor_right_pitch'], 'Raptor 2')
+
+    def getControlLimits(self) -> Dict[str, Tuple[float, float]]:
+        """Get the limits for each control input."""
+        return {
+            'raptor_left_power': (0, 100),
+            'raptor_right_power': (0, 100),
+            'rcs_top_left_power': (0, 100),
+            'rcs_top_right_power': (0, 100),
+            'rcs_bot_left_power': (0, 100),
+            'rcs_bot_right_power': (0, 100),
+            'raptor_left_pitch': (-radians(25), radians(25)),
+            'raptor_right_pitch': (-radians(25), radians(25))
+        }
 
 class Starship(pygame.sprite.Sprite):
     """Operates starship"""
@@ -514,13 +699,17 @@ class Starship(pygame.sprite.Sprite):
                     component.updateSprite(self.getPosition().x, self.getPosition().y, self.getPitch())
         #print()
 
-class World():
+class World(SimulationEnvironment):
     """This class holds global parameters"""
     g=-9.81
     pos=[0,0]
     target_pos=(300,900-108)
     m_per_px=0.5
     time=0
+    _objects = []  # List to store simulation objects
+
+    def __init__(self):
+        super().__init__("World", {})
 
     @classmethod
     def pos_meters_to_screen(cls, pos_to_calc):
@@ -531,6 +720,60 @@ class World():
     def update(cls, target):
         if target.rect.center[1] < 100:
             cls.pos[1]+=100
+
+    # Implement SimulationEnvironment abstract methods
+    def step(self, dt: float) -> None:
+        """Advance the simulation by one time step."""
+        World.time += dt
+        for obj in self._objects:
+            obj.update(dt)
+
+    def reset(self) -> None:
+        """Reset the simulation to initial conditions."""
+        World.time = 0
+        World.pos = [0, 0]
+        for obj in self._objects:
+            if hasattr(obj, 'reset'):
+                obj.reset()
+
+    def addObject(self, obj) -> None:
+        """Add an object to the simulation."""
+        if obj not in self._objects:
+            self._objects.append(obj)
+
+    def removeObject(self, obj) -> None:
+        """Remove an object from the simulation."""
+        if obj in self._objects:
+            self._objects.remove(obj)
+
+    def getObjects(self) -> List:
+        """Get all objects in the simulation."""
+        return self._objects.copy()
+
+    # Implement SimulationObject abstract methods
+    def getState(self) -> Dict[str, Any]:
+        """Get the current state of the world."""
+        return {
+            'time': World.time,
+            'gravity': World.g,
+            'pos': World.pos,
+            'target_pos': World.target_pos,
+            'm_per_px': World.m_per_px,
+            'object_count': len(self._objects)
+        }
+
+    def setState(self, state: Dict[str, Any]) -> None:
+        """Set the state of the world."""
+        if 'time' in state:
+            World.time = state['time']
+        if 'gravity' in state:
+            World.g = state['gravity']
+        if 'pos' in state:
+            World.pos = state['pos']
+        if 'target_pos' in state:
+            World.target_pos = state['target_pos']
+        if 'm_per_px' in state:
+            World.m_per_px = state['m_per_px']
 
 
 class Ground(pygame.sprite.Sprite):
